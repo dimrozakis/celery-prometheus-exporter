@@ -135,13 +135,16 @@ class WorkerMonitoringThread(threading.Thread):
     celery_ping_timeout_seconds = 5
     periodicity_seconds = 5
 
-    def __init__(self, *args, app=None, **kwargs):
+    def __init__(self, *args, app=None, enable_events=False, **kwargs):
         self._app = app
+        self._enable_events = enable_events
         super().__init__(*args, **kwargs)
 
     def run(self):  # pragma: no cover
         while True:
             self.update_workers_count()
+            if self._enable_events:
+                self._app.control.enable_events()
             time.sleep(self.periodicity_seconds)
 
     def update_workers_count(self):
@@ -205,6 +208,9 @@ def main():  # pragma: no cover
         help="Address the HTTPD should listen on. Defaults to {}".format(
             DEFAULT_ADDR))
     parser.add_argument(
+        '--enable-events', action='store_true',
+        help="Periodically enable Celery events")
+    parser.add_argument(
         '--tz', dest='tz',
         help="Timezone used by the celery app.")
     parser.add_argument(
@@ -244,7 +250,7 @@ def main():  # pragma: no cover
     t = MonitorThread(app=app)
     t.daemon = True
     t.start()
-    w = WorkerMonitoringThread(app=app)
+    w = WorkerMonitoringThread(app=app, enable_events=opts.enable_events)
     w.daemon = True
     w.start()
     start_httpd(opts.addr)
