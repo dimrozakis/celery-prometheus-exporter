@@ -154,11 +154,15 @@ class EnableEventsThread(threading.Thread):
 
     def __init__(self, *args, app=None, **kwargs):
         self._app = app
+        self.log = logging.getLogger('enable-events')
         super().__init__(*args, **kwargs)
 
     def run(self):  # pragma: no cover
         while True:
-            self._app.control.enable_events()
+            try:
+                self._app.control.enable_events()
+            except Exception as exc:
+                self.log.error("Error while trying to enable events: %r", exc)
             time.sleep(self.periodicity_seconds)
 
 
