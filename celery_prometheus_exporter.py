@@ -135,21 +135,31 @@ class WorkerMonitoringThread(threading.Thread):
     celery_ping_timeout_seconds = 5
     periodicity_seconds = 5
 
-    def __init__(self, *args, app=None, enable_events=False, **kwargs):
+    def __init__(self, *args, app=None, **kwargs):
         self._app = app
-        self._enable_events = enable_events
         super().__init__(*args, **kwargs)
 
     def run(self):  # pragma: no cover
         while True:
             self.update_workers_count()
-            if self._enable_events:
-                self._app.control.enable_events()
             time.sleep(self.periodicity_seconds)
 
     def update_workers_count(self):
         WORKERS.set(len(self._app.control.ping(
             timeout=self.celery_ping_timeout_seconds)))
+
+
+class EnableEventsThread(threading.Thread):
+    periodicity_seconds = 5
+
+    def __init__(self, *args, app=None, **kwargs):
+        self._app = app
+        super().__init__(*args, **kwargs)
+
+    def run(self):  # pragma: no cover
+        while True:
+            self._app.control.enable_events()
+            time.sleep(self.periodicity_seconds)
 
 
 def setup_metrics(app):
@@ -250,12 +260,19 @@ def main():  # pragma: no cover
     t = MonitorThread(app=app)
     t.daemon = True
     t.start()
-    w = WorkerMonitoringThread(app=app, enable_events=opts.enable_events)
+    w = WorkerMonitoringThread(app=app)
     w.daemon = True
     w.start()
+    e = None
+    if opts.enable_events:
+        e = EnableEventsThread(app=app)
+        e.daemon = True
+        e.start()
     start_httpd(opts.addr)
     t.join()
     w.join()
+    if e is not None:
+        e.join()
 
 
 if __name__ == '__main__':  # pragma: no cover
